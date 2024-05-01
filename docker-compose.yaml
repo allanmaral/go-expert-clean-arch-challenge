@@ -1,0 +1,48 @@
+version: "3"
+
+services:
+  mysql:
+    image: mysql:8.4.0
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: orders
+      MYSQL_PASSWORD: root
+    ports:
+      - 3306:3306
+    volumes:
+      - .docker/mysql:/var/lib/mysql
+    healthcheck:
+      test: out=$$(mysqladmin ping -h localhost -P 3306 -uroot -proot 2>&1); echo $$out | grep 'mysqld is alive' || { echo $$out; exit 1; }
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  migrate:
+    build:
+      context: .
+      dockerfile: migrate.Dockerfile
+    volumes:
+      - ./internal/infra/database/sql/migrations:/migrations
+    command:
+      [
+        "-path",
+        "/migrations",
+        "-database",
+        "mysql://root:root@tcp(mysql:3306)/orders",
+        "up",
+      ]
+    depends_on:
+      - mysql
+
+  rabbitmq:
+    image: rabbitmq:3.13.1-management
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
